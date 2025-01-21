@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fish Species Prediction</title>
+    <style>
+        #label-container {
+            margin-top: 20px;
+            font-size: 18px;
+            font-family: Arial, sans-serif;
+        }
+        .prediction-text {
+            font-weight: bold;
+            color: #333;
+        }
+    </style>
+</head>
+<body>
+    <h1>Fish Species Prediction</h1>
+    <!-- File input for image upload -->
+    <input type="file" id="image-upload" accept="image/*">
+    <!-- Canvas to display the uploaded image -->
+    <canvas id="canvas" width="200" height="200" style="display: none;"></canvas>
+    <!-- Container to display the prediction -->
+    <div id="label-container">
+        <p class="prediction-text">Prediction will appear here.</p>
+    </div>
+
+    <!-- Teachable Machine Script -->
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@latest/dist/tf.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@teachablemachine/image@latest/dist/teachablemachine-image.min.js"></script>
+    <script type="text/javascript">
+        // Replace with your Teachable Machine model's URLs
+        const modelURL = "https://teachablemachine.withgoogle.com/models/smzYtSYsx/model.json";
+        const metadataURL = "https://teachablemachine.withgoogle.com/models/smzYtSYsx/metadata.json";
+
+        let model, maxPredictions;
+
+        // Load the model
+        async function init() {
+            model = await tmImage.load(modelURL, metadataURL);
+            maxPredictions = model.getTotalClasses();
+            console.log("Model loaded successfully.");
+        }
+
+        // Handle image upload
+        document.getElementById("image-upload").addEventListener("change", async (event) => {
+            const file = event.target.files[0];
+            if (file) {
+                const image = await loadImage(file);
+                const canvas = document.getElementById("canvas");
+                const context = canvas.getContext("2d");
+
+                // Draw the uploaded image on the canvas
+                canvas.width = image.width;
+                canvas.height = image.height;
+                context.drawImage(image, 0, 0, image.width, image.height);
+                canvas.style.display = "block"; // Show the canvas
+
+                // Predict the uploaded image
+                await predict(canvas);
+            }
+        });
+
+        // Load image from file
+        function loadImage(file) {
+            return new Promise((resolve, reject) => {
+                const img = new Image();
+                img.src = URL.createObjectURL(file);
+                img.onload = () => resolve(img);
+                img.onerror = (error) => reject(error);
+            });
+        }
+
+        // Make a prediction
+        async function predict(imageElement) {
+            const predictions = await model.predict(imageElement);
+            const labelContainer = document.getElementById("label-container");
+
+            // Clear previous predictions
+            labelContainer.innerHTML = "";
+
+            // Find the top prediction
+            let topPrediction = predictions[0];
+            for (let i = 1; i < predictions.length; i++) {
+                if (predictions[i].probability > topPrediction.probability) {
+                    topPrediction = predictions[i];
+                }
+            }
+
+            // Display the top prediction
+            labelContainer.innerHTML = `
+                <p class="prediction-text">Predicted Fish: <strong>${topPrediction.className}</strong></p>
+                <p class="prediction-text">Confidence: <strong>${(topPrediction.probability * 100).toFixed(2)}%</strong></p>
+            `;
+        }
+
+        // Initialize the model when the page loads
+        init();
+    </script>
+</body>
+</html>
