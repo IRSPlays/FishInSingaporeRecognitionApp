@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fish Species Prediction</title>
+</head>
+<body>
+    <h1>Fish Species Prediction</h1>
+    <!-- Button to open the camera -->
+    <button onclick="openCamera()">Send Image</button>
+    <!-- Element to display the captured image -->
+    <img id="captured-image" src="" alt="Captured Image" style="display: none; max-width: 100%;">
+    <!-- Element to display the prediction result -->
+    <p id="prediction-result">Prediction will appear here.</p>
+
+    <!-- Teachable Machine Script -->
+    <script src="https://cdn.jsdelivr.net/npm/@teachablemachine/image@latest/dist/teachablemachine-image.min.js"></script>
+    <script>
+        // Load the Teachable Machine model
+        const modelURL = "https://irsplays.github.io/FishInSingaporeRecognitionApp/model.json";
+        const metadataURL = "https://irsplays.github.io/FishInSingaporeRecognitionApp/metadata.json";
+
+        let model;
+
+        async function loadModel() {
+            try {
+                model = await tmImage.load(modelURL, metadataURL);
+                console.log("Model loaded successfully.");
+            } catch (error) {
+                console.error("Error loading model:", error);
+            }
+        }
+
+        // Open the camera and capture an image
+        function openCamera() {
+            const input = document.createElement("input");
+            input.type = "file";
+            input.accept = "image/*";
+            input.capture = "environment"; // Use the rear camera (if available)
+            input.style.display = "none";
+
+            input.onchange = async (event) => {
+                const file = event.target.files[0];
+                if (file) {
+                    // Display the captured image
+                    const imgElement = document.getElementById("captured-image");
+                    imgElement.src = URL.createObjectURL(file);
+                    imgElement.style.display = "block";
+
+                    // Predict the fish species
+                    const prediction = await predictFish(file);
+                    document.getElementById("prediction-result").innerText = `Predicted Fish: ${prediction}`;
+                }
+            };
+
+            // Trigger the file input
+            document.body.appendChild(input);
+            input.click();
+            document.body.removeChild(input);
+        }
+
+        // Predict fish species
+        async function predictFish(file) {
+            try {
+                const image = await loadImage(file);
+                const predictions = await model.predict(image);
+                const topPrediction = predictions[0].className;
+                return topPrediction;
+            } catch (error) {
+                console.error("Error predicting fish species:", error);
+                return "Error: Unable to predict.";
+            }
+        }
+
+        // Load image from file
+        function loadImage(file) {
+            return new Promise((resolve, reject) => {
+                const img = new Image();
+                img.src = URL.createObjectURL(file);
+                img.onload = () => resolve(img);
+                img.onerror = (error) => reject(error);
+            });
+        }
+
+        // Load the model when the page loads
+        loadModel();
+    </script>
+</body>
+</html>
