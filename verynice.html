@@ -33,30 +33,27 @@
             margin-bottom: 1.5rem;
         }
 
-        /* Camera Preview */
-        #camera-preview {
-            width: 100%;
-            height: auto;
-            border-radius: 5px;
-            margin-top: 1.5rem;
-            display: none;
+        /* File Input Styling */
+        .file-input {
+            margin: 1.5rem 0;
         }
 
-        /* Buttons */
-        button {
+        .file-input label {
+            display: inline-block;
             background: #007bff;
             color: #fff;
-            border: none;
             padding: 0.75rem 1.5rem;
             border-radius: 5px;
             cursor: pointer;
-            font-size: 1rem;
-            margin: 0.5rem;
             transition: background 0.3s ease;
         }
 
-        button:hover {
+        .file-input label:hover {
             background: #0056b3;
+        }
+
+        .file-input input[type="file"] {
+            display: none;
         }
 
         /* Image Preview */
@@ -106,7 +103,7 @@
                 font-size: 1.5rem;
             }
 
-            button {
+            .file-input label {
                 padding: 0.5rem 1rem;
                 font-size: 0.9rem;
             }
@@ -116,13 +113,13 @@
 <body>
     <div class="container">
         <h1>Fish Species Prediction</h1>
-        <!-- Camera Preview -->
-        <video id="camera-preview" autoplay></video>
-        <!-- Buttons -->
-        <button id="start-camera">Start Camera</button>
-        <button id="capture-button" style="display: none;">Capture Image</button>
+        <!-- File Input -->
+        <div class="file-input">
+            <label for="image-upload">Upload Fish Image</label>
+            <input type="file" id="image-upload" accept="image/*">
+        </div>
         <!-- Image Preview -->
-        <img id="image-preview" src="" alt="Captured Image">
+        <img id="image-preview" src="" alt="Uploaded Image">
         <!-- Prediction Result -->
         <div id="prediction-result">Prediction will appear here.</div>
         <!-- Loading Spinner -->
@@ -137,11 +134,7 @@
         const modelURL = "https://teachablemachine.withgoogle.com/models/smzYtSYsx/model.json";
         const metadataURL = "https://teachablemachine.withgoogle.com/models/smzYtSYsx/metadata.json";
 
-        // Replace with your Thunkable Web API endpoint and API key
-        const thunkableAPIURL = "https://xapi.thunkable.com/webapis/v1/<your-project-id>/predict";
-        const apiKey = "your-api-key"; // Replace with your actual API key
-
-        let model, stream;
+        let model;
 
         // Load the model
         async function loadModel() {
@@ -149,71 +142,26 @@
             console.log("Model loaded successfully.");
         }
 
-        // Start the camera
-        document.getElementById("start-camera").addEventListener("click", async () => {
-            try {
-                // Access the camera
-                stream = await navigator.mediaDevices.getUserMedia({ video: true });
-                const cameraPreview = document.getElementById("camera-preview");
-                cameraPreview.srcObject = stream;
-                cameraPreview.style.display = "block";
+        // Handle image upload
+        document.getElementById("image-upload").addEventListener("change", async (event) => {
+            const file = event.target.files[0];
+            if (file) {
+                // Show loading spinner
+                document.getElementById("spinner").style.display = "block";
 
-                // Show the capture button
-                document.getElementById("capture-button").style.display = "inline-block";
-            } catch (error) {
-                console.error("Error accessing camera:", error);
-                alert("Unable to access camera. Please ensure permissions are granted.");
+                // Display the uploaded image
+                const imagePreview = document.getElementById("image-preview");
+                imagePreview.src = URL.createObjectURL(file);
+                imagePreview.style.display = "block";
+
+                // Predict the uploaded image
+                const predictions = await predictFish(file);
+                displayPredictions(predictions);
+
+                // Hide loading spinner
+                document.getElementById("spinner").style.display = "none";
             }
         });
-
-        // Capture an image from the camera
-        document.getElementById("capture-button").addEventListener("click", async () => {
-            const cameraPreview = document.getElementById("camera-preview");
-            const imagePreview = document.getElementById("image-preview");
-
-            // Create a canvas to capture the image
-            const canvas = document.createElement("canvas");
-            canvas.width = cameraPreview.videoWidth;
-            canvas.height = cameraPreview.videoHeight;
-            const context = canvas.getContext("2d");
-            context.drawImage(cameraPreview, 0, 0, canvas.width, canvas.height);
-
-            // Convert the canvas image to a data URL
-            const imageDataURL = canvas.toDataURL("image/jpeg");
-
-            // Display the captured image
-            imagePreview.src = imageDataURL;
-            imagePreview.style.display = "block";
-
-            // Convert the data URL to a file
-            const file = dataURLtoFile(imageDataURL, "captured-image.jpg");
-
-            // Show loading spinner
-            document.getElementById("spinner").style.display = "block";
-
-            // Predict the captured image
-            const predictions = await predictFish(file);
-            displayPredictions(predictions);
-
-            // Send prediction to Thunkable Web API
-            await sendPredictionToThunkable(predictions);
-
-            // Hide loading spinner
-            document.getElementById("spinner").style.display = "none";
-        });
-
-        // Convert data URL to file
-        function dataURLtoFile(dataURL, filename) {
-            const arr = dataURL.split(",");
-            const mime = arr[0].match(/:(.*?);/)[1];
-            const bstr = atob(arr[1]);
-            let n = bstr.length;
-            const u8arr = new Uint8Array(n);
-            while (n--) {
-                u8arr[n] = bstr.charCodeAt(n);
-            }
-            return new File([u8arr], filename, { type: mime });
-        }
 
         // Predict fish species
         async function predictFish(file) {
@@ -248,43 +196,6 @@
             // Display the top prediction
             resultText = `Predicted Fish: <strong>${topPrediction.className}</strong><br>Confidence: <strong>${(topPrediction.probability * 100).toFixed(2)}%</strong>`;
             predictionResult.innerHTML = resultText;
-        }
-
-        // Send prediction to Thunkable Web API
-        async function sendPredictionToThunkable(predictions) {
-            try {
-                // Find the top prediction
-                let topPrediction = predictions[0];
-                for (let i = 1; i < predictions.length; i++) {
-                    if (predictions[i].probability > topPrediction.probability) {
-                        topPrediction = predictions[i];
-                    }
-                }
-
-                // Prepare the data to send
-                const data = {
-                    fish_species: topPrediction.className,
-                    confidence: (topPrediction.probability * 100).toFixed(2)
-                };
-
-                // Send POST request to Thunkable Web API with API key
-                const response = await fetch(thunkableAPIURL, {
-                    method: "POST",
-                    headers: {
-                        "Content-Type": "application/json",
-                        "Authorization": `Bearer ${apiKey}` // Include the API key in the headers
-                    },
-                    body: JSON.stringify(data)
-                });
-
-                if (response.ok) {
-                    console.log("Prediction sent to Thunkable successfully.");
-                } else {
-                    console.error("Failed to send prediction to Thunkable:", response.statusText);
-                }
-            } catch (error) {
-                console.error("Error sending prediction to Thunkable:", error);
-            }
         }
 
         // Initialize the model when the page loads
