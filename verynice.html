@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fish Species Prediction</title>
+    <style>
+        /* General Styles */
+        body {
+            font-family: 'Arial', sans-serif;
+            background-color: #f4f4f9;
+            margin: 0;
+            padding: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+        }
+
+        .container {
+            background: #ffffff;
+            padding: 2rem;
+            border-radius: 10px;
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+            max-width: 500px;
+            width: 100%;
+            text-align: center;
+        }
+
+        h1 {
+            color: #333;
+            font-size: 2rem;
+            margin-bottom: 1.5rem;
+        }
+
+        /* File Input Styling */
+        .file-input {
+            margin: 1.5rem 0;
+        }
+
+        .file-input label {
+            display: inline-block;
+            background: #007bff;
+            color: #fff;
+            padding: 0.75rem 1.5rem;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: background 0.3s ease;
+        }
+
+        .file-input label:hover {
+            background: #0056b3;
+        }
+
+        .file-input input[type="file"] {
+            display: none;
+        }
+
+        /* Image Preview */
+        #image-preview {
+            max-width: 100%;
+            height: auto;
+            border-radius: 5px;
+            margin-top: 1.5rem;
+            display: none;
+        }
+
+        /* Prediction Result */
+        #prediction-result {
+            margin-top: 1.5rem;
+            font-size: 1.2rem;
+            color: #333;
+        }
+
+        #prediction-result strong {
+            color: #007bff;
+        }
+
+        /* Loading Spinner */
+        .spinner {
+            display: none;
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #007bff;
+            border-radius: 50%;
+            width: 30px;
+            height: 30px;
+            animation: spin 1s linear infinite;
+            margin: 1rem auto;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        /* Responsive Design */
+        @media (max-width: 600px) {
+            .container {
+                padding: 1rem;
+            }
+
+            h1 {
+                font-size: 1.5rem;
+            }
+
+            .file-input label {
+                padding: 0.5rem 1rem;
+                font-size: 0.9rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Fish Species Prediction</h1>
+        <!-- File Input -->
+        <div class="file-input">
+            <label for="image-upload">Take a Picture</label>
+            <input type="file" id="image-upload" accept="image/*" capture="environment">
+        </div>
+        <!-- Image Preview -->
+        <img id="image-preview" src="" alt="Captured Image">
+        <!-- Prediction Result -->
+        <div id="prediction-result">Prediction will appear here.</div>
+        <!-- Loading Spinner -->
+        <div class="spinner" id="spinner"></div>
+    </div>
+
+    <!-- Teachable Machine Script -->
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@latest/dist/tf.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@teachablemachine/image@latest/dist/teachablemachine-image.min.js"></script>
+    <script>
+        // Replace with your Teachable Machine model's URLs
+        const modelURL = "https://teachablemachine.withgoogle.com/models/smzYtSYsx/model.json";
+        const metadataURL = "https://teachablemachine.withgoogle.com/models/smzYtSYsx/metadata.json";
+
+        // Replace with your Thunkable Web API endpoint and API key
+        const thunkableAPIURL = "https://xapi.thunkable.com/webapis/v1/<your-project-id>/predict";
+        const apiKey = "your-api-key"; // Replace with your actual API key
+
+        let model;
+
+        // Load the model
+        async function loadModel() {
+            model = await tmImage.load(modelURL, metadataURL);
+            console.log("Model loaded successfully.");
+        }
+
+        // Handle image upload
+        document.getElementById("image-upload").addEventListener("change", async (event) => {
+            const file = event.target.files[0];
+            if (file) {
+                // Show loading spinner
+                document.getElementById("spinner").style.display = "block";
+
+                // Display the captured image
+                const imagePreview = document.getElementById("image-preview");
+                imagePreview.src = URL.createObjectURL(file);
+                imagePreview.style.display = "block";
+
+                // Predict the captured image
+                const predictions = await predictFish(file);
+                displayPredictions(predictions);
+
+                // Send prediction to Thunkable Web API
+                await sendPredictionToThunkable(predictions);
+
+                // Hide loading spinner
+                document.getElementById("spinner").style.display = "none";
+            }
+        });
+
+        // Predict fish species
+        async function predictFish(file) {
+            const image = await loadImage(file);
+            const predictions = await model.predict(image);
+            return predictions;
+        }
+
+        // Load image from file
+        function loadImage(file) {
+            return new Promise((resolve, reject) => {
+                const img = new Image();
+                img.src = URL.createObjectURL(file);
+                img.onload = () => resolve(img);
+                img.onerror = (error) => reject(error);
+            });
+        }
+
+        // Display predictions
+        function displayPredictions(predictions) {
+            const predictionResult = document.getElementById("prediction-result");
+            let resultText = "";
+
+            // Find the top prediction
+            let topPrediction = predictions[0];
+            for (let i = 1; i < predictions.length; i++) {
+                if (predictions[i].probability > topPrediction.probability) {
+                    topPrediction = predictions[i];
+                }
+            }
+
+            // Display the top prediction
+            resultText = `Predicted Fish: <strong>${topPrediction.className}</strong><br>Confidence: <strong>${(topPrediction.probability * 100).toFixed(2)}%</strong>`;
+            predictionResult.innerHTML = resultText;
+        }
+
+        // Send prediction to Thunkable Web API
+        async function sendPredictionToThunkable(predictions) {
+            try {
+                // Find the top prediction
+                let topPrediction = predictions[0];
+                for (let i = 1; i < predictions.length; i++) {
+                    if (predictions[i].probability > topPrediction.probability) {
+                        topPrediction = predictions[i];
+                    }
+                }
+
+                // Prepare the data to send
+                const data = {
+                    fish_species: topPrediction.className,
+                    confidence: (topPrediction.probability * 100).toFixed(2)
+                };
+
+                // Send POST request to Thunkable Web API with API key
+                const response = await fetch(thunkableAPIURL, {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                        "Authorization": `Bearer ${apiKey}` // Include the API key in the headers
+                    },
+                    body: JSON.stringify(data)
+                });
+
+                if (response.ok) {
+                    console.log("Prediction sent to Thunkable successfully.");
+                } else {
+                    console.error("Failed to send prediction to Thunkable:", response.statusText);
+                }
+            } catch (error) {
+                console.error("Error sending prediction to Thunkable:", error);
+            }
+        }
+
+        // Initialize the model when the page loads
+        loadModel();
+    </script>
+</body>
+</html>
